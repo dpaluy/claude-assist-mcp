@@ -87,24 +87,6 @@ async function runTests() {
   });
   await delay(12000);
   
-  console.log('\n5️⃣ Testing request_code_review...');
-  sendRequest('tools/call', {
-    name: 'request_code_review',
-    arguments: {
-      request: {
-        code: 'function add(a, b) { return a + b; }',
-        language: 'javascript',
-        context: 'Simple addition function',
-        reviewType: 'general'
-      },
-      pollingOptions: {
-        timeout: 15000,
-        interval: 2000
-      }
-    }
-  });
-  await delay(17000);
-  
   console.log('\n✅ Tests completed. Shutting down server...');
   server.kill();
   process.exit(0);

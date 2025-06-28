@@ -7,7 +7,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { logger } from './utils/logger.js';
-import { handleCodeReviewRequest } from './tools/code-review.js';
 import { z } from 'zod';
 
 const server = new Server(
@@ -21,14 +20,6 @@ const server = new Server(
     },
   }
 );
-
-const CodeReviewSchema = z.object({
-  code: z.string().describe('The code to review'),
-  language: z.string().optional().describe('Programming language of the code'),
-  context: z.string().optional().describe('Additional context for the review'),
-  reviewType: z.enum(['general', 'security', 'performance', 'style']).optional()
-    .describe('Type of code review to perform'),
-});
 
 const PollingOptionsSchema = z.object({
   timeout: z.number().default(30000).describe('Timeout in milliseconds'),
@@ -45,14 +36,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           operation: z.enum(['ask', 'get_conversations']).describe('Operation to perform'),
           prompt: z.string().optional().describe('The prompt to send to Claude Desktop (required for ask operation)'),
           conversationId: z.string().optional().describe('Optional conversation ID to continue a specific conversation'),
-          pollingOptions: PollingOptionsSchema.optional(),
-        }),
-      },
-      {
-        name: 'request_code_review',
-        description: 'Send a specialized code review request to Claude Desktop with structured prompting',
-        inputSchema: z.object({
-          request: CodeReviewSchema,
           pollingOptions: PollingOptionsSchema.optional(),
         }),
       },
@@ -81,27 +64,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'request_code_review': {
-        const validatedArgs = z.object({
-          request: CodeReviewSchema,
-          pollingOptions: PollingOptionsSchema.optional(),
-        }).parse(args);
-
-        const result = await handleCodeReviewRequest(
-          validatedArgs.request,
-          validatedArgs.pollingOptions
-        );
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
             },
           ],
         };
