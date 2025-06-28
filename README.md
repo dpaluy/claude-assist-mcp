@@ -68,21 +68,58 @@ Add the following to your Claude Desktop configuration file (`~/Library/Applicat
 
 ## MCP Commands
 
-This MCP server provides the following command:
+This MCP server provides two main commands:
 
-### `request_code_review`
-Send a code review request to Claude Desktop and wait for the response. This command automates the process of:
-- Opening Claude Desktop
-- Creating a new conversation
-- Submitting the code for review
-- Polling for and returning the response
+### 1. `claude_desktop`
+General-purpose interaction with Claude Desktop app. Supports two operations:
+
+#### `ask` operation
+- **Purpose**: Send any prompt to Claude Desktop and get a response
+- **Parameters**:
+  - `operation`: "ask" (required)
+  - `prompt`: The text to send to Claude Desktop (required)
+  - `conversationId`: Optional ID to continue a specific conversation
+  - `pollingOptions`: Optional timeout and interval settings
+
+#### `get_conversations` operation
+- **Purpose**: Retrieve a list of available Claude Desktop conversations
+- **Parameters**:
+  - `operation`: "get_conversations" (required)
+
+### 2. `request_code_review`
+Specialized command for code review requests with structured prompting. This command:
+- Uses a professional code review prompt template
+- Supports different review types (security, performance, style, general)
+- Formats the review request for comprehensive analysis
+- Returns structured feedback with priorities
 
 ## Usage
 
-Once configured, Claude Code can use the MCP to request code reviews:
+Once configured, Claude Code can use the MCP in various ways:
+
+### General Purpose Usage
 
 ```typescript
-// Example usage in Claude Code
+// Ask Claude Desktop a question
+const response = await mcp.callTool('claude_desktop', {
+  operation: 'ask',
+  prompt: 'Explain the concept of dependency injection in software engineering',
+  pollingOptions: {
+    timeout: 30000,
+    interval: 2000
+  }
+});
+
+// Get list of conversations
+const conversations = await mcp.callTool('claude_desktop', {
+  operation: 'get_conversations'
+});
+```
+
+### Code Review Usage
+
+```typescript
+// Request a specialized code review
 const response = await mcp.callTool('request_code_review', {
   request: {
     code: 'function add(a, b) { return a + b; }',
@@ -91,28 +128,31 @@ const response = await mcp.callTool('request_code_review', {
     reviewType: 'general'
   },
   pollingOptions: {
-    timeout: 30000,  // 30 seconds
-    interval: 2000   // Poll every 2 seconds
+    timeout: 30000,
+    interval: 2000
   }
 });
 ```
 
 ### Example in Claude Code
 
-When using Claude Code, you can request a code review like this:
+When using Claude Code, you can interact with Claude Desktop in multiple ways:
 
+**General question:**
 ```
-Please review this TypeScript function using Claude Desktop:
-
-function calculateDiscount(price: number, discountPercent: number): number {
-  if (discountPercent < 0 || discountPercent > 100) {
-    throw new Error('Invalid discount percentage');
-  }
-  return price * (1 - discountPercent / 100);
-}
+Ask Claude Desktop: What are the best practices for error handling in Python?
 ```
 
-Claude Code will automatically use the MCP server to send this request to Claude Desktop and return the review.
+**Code review request:**
+```
+Please perform a security review of this Python function:
+
+def get_user_data(user_id):
+    query = f"SELECT * FROM users WHERE id = {user_id}"
+    return db.execute(query)
+```
+
+Claude Code will automatically use the appropriate MCP command based on your request.
 
 ## Development
 
@@ -144,9 +184,35 @@ npm run typecheck
 
 ### Tools
 
-#### `request_code_review`
+#### 1. `claude_desktop`
 
-Sends a code review request to Claude Desktop.
+General-purpose interaction with Claude Desktop.
+
+**Parameters:**
+
+- `operation` (required): "ask" or "get_conversations"
+- `prompt` (string, required for "ask"): The prompt to send
+- `conversationId` (string, optional): Continue a specific conversation
+- `pollingOptions` (optional):
+  - `timeout` (number): Max wait time in ms (default: 30000)
+  - `interval` (number): Poll interval in ms (default: 2000)
+
+**Response for "ask":**
+```
+String containing Claude's response
+```
+
+**Response for "get_conversations":**
+```typescript
+{
+  conversations: string[];
+  timestamp: string;
+}
+```
+
+#### 2. `request_code_review`
+
+Specialized code review with structured prompting.
 
 **Parameters:**
 
@@ -154,14 +220,13 @@ Sends a code review request to Claude Desktop.
   - `code` (string): The code to review
   - `language` (string, optional): Programming language
   - `context` (string, optional): Additional context
-  - `reviewType` (string, optional): Type of review (general, security, performance, style)
+  - `reviewType` (string, optional): "general", "security", "performance", or "style"
 
 - `pollingOptions` (optional):
-  - `timeout` (number): Max time to wait for response in ms (default: 30000)
-  - `interval` (number): Polling interval in ms (default: 2000)
+  - `timeout` (number): Max wait time in ms (default: 30000)
+  - `interval` (number): Poll interval in ms (default: 2000)
 
 **Response:**
-
 ```typescript
 {
   reviewId: string;

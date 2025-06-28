@@ -39,8 +39,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: 'claude_desktop',
+        description: 'Interact with Claude Desktop app on macOS',
+        inputSchema: z.object({
+          operation: z.enum(['ask', 'get_conversations']).describe('Operation to perform'),
+          prompt: z.string().optional().describe('The prompt to send to Claude Desktop (required for ask operation)'),
+          conversationId: z.string().optional().describe('Optional conversation ID to continue a specific conversation'),
+          pollingOptions: PollingOptionsSchema.optional(),
+        }),
+      },
+      {
         name: 'request_code_review',
-        description: 'Send a code review request to Claude Desktop and wait for response',
+        description: 'Send a specialized code review request to Claude Desktop with structured prompting',
         inputSchema: z.object({
           request: CodeReviewSchema,
           pollingOptions: PollingOptionsSchema.optional(),
@@ -55,6 +65,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
+      case 'claude_desktop': {
+        const { handleClaudeDesktop } = await import('./tools/claude-desktop.js');
+        const validatedArgs = z.object({
+          operation: z.enum(['ask', 'get_conversations']),
+          prompt: z.string().optional(),
+          conversationId: z.string().optional(),
+          pollingOptions: PollingOptionsSchema.optional(),
+        }).parse(args);
+
+        const result = await handleClaudeDesktop(validatedArgs);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
       case 'request_code_review': {
         const validatedArgs = z.object({
           request: CodeReviewSchema,

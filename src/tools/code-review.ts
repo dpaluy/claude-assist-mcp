@@ -192,27 +192,50 @@ async function checkClaudeDesktopResponse(reviewId: string): Promise<CodeReviewR
 }
 
 function formatReviewPrompt(request: CodeReviewRequest): string {
-  let prompt = `Please review the following code:\n\n`;
+  let prompt = `[CODE REVIEW REQUEST]\n\n`;
+  prompt += `You are a senior software engineer conducting a thorough code review. `;
+  prompt += `Please analyze the following code with attention to detail.\n\n`;
   
   if (request.language) {
-    prompt += `Language: ${request.language}\n\n`;
+    prompt += `**Language:** ${request.language}\n`;
   }
   
   if (request.reviewType) {
-    prompt += `Review Type: ${request.reviewType}\n\n`;
+    const reviewTypeDescriptions = {
+      general: 'General code quality and best practices',
+      security: 'Security vulnerabilities and safe coding practices',
+      performance: 'Performance optimization and efficiency',
+      style: 'Code style, readability, and maintainability'
+    };
+    prompt += `**Review Focus:** ${reviewTypeDescriptions[request.reviewType]}\n`;
   }
   
   if (request.context) {
-    prompt += `Context: ${request.context}\n\n`;
+    prompt += `**Context:** ${request.context}\n`;
   }
   
+  prompt += `\n**Code to Review:**\n`;
   prompt += `\`\`\`${request.language || ''}\n${request.code}\n\`\`\`\n\n`;
-  prompt += `Please provide a comprehensive code review including:\n`;
-  prompt += `- Code quality and best practices\n`;
-  prompt += `- Potential bugs or issues\n`;
-  prompt += `- Performance considerations\n`;
-  prompt += `- Security concerns (if applicable)\n`;
-  prompt += `- Suggestions for improvement`;
+  
+  prompt += `**Please provide a detailed review covering:**\n`;
+  prompt += `1. **Overview** - Brief summary of what the code does\n`;
+  prompt += `2. **Strengths** - What's done well in the code\n`;
+  prompt += `3. **Issues & Concerns** - Bugs, potential problems, or violations\n`;
+  
+  if (request.reviewType === 'security') {
+    prompt += `4. **Security Analysis** - Vulnerabilities, injection risks, data exposure\n`;
+  } else if (request.reviewType === 'performance') {
+    prompt += `4. **Performance Analysis** - Bottlenecks, optimization opportunities\n`;
+  } else if (request.reviewType === 'style') {
+    prompt += `4. **Style & Readability** - Naming, structure, documentation needs\n`;
+  } else {
+    prompt += `4. **Code Quality** - Best practices, design patterns, maintainability\n`;
+  }
+  
+  prompt += `5. **Recommendations** - Specific suggestions for improvement with code examples\n`;
+  prompt += `6. **Priority** - Rate issues as High/Medium/Low priority\n\n`;
+  
+  prompt += `Format your response clearly with sections and use code blocks for any suggested improvements.`;
   
   return prompt;
 }
