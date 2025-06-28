@@ -27,7 +27,9 @@ export async function runAppleScript(
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const { stdout, stderr } = await execAsync(`osascript -e '${script}'`, {
+      // Escape single quotes in the script properly
+      const escapedScript = script.replace(/'/g, "'\"'\"'");
+      const { stdout, stderr } = await execAsync(`osascript -e '${escapedScript}'`, {
         timeout,
       });
 
