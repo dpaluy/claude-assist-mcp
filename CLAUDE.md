@@ -96,17 +96,6 @@ The project integrates with Claude Desktop through:
 - Tool definitions exposed via MCP protocol
 - Proper error handling and user feedback
 
-### Apple Application Support
-Priority applications to support:
-- Messages
-- Mail
-- Calendar
-- Notes
-- Reminders
-- Safari
-- System Settings
-- Finder operations
-
 ## Development Guidelines
 
 1. **AppleScript Best Practices**
