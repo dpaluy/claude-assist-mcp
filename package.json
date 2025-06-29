@@ -1,7 +1,7 @@
 {
-  "name": "claude-assist-mcp",
+  "name": "claude-desktop-mcp",
   "version": "0.1.0",
-  "description": "Model Context Protocol server for Apple integrations with Claude Desktop",
+  "description": "Model Context Protocol server for Claude Desktop integration on macOS",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

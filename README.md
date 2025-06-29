@@ -1,4 +1,4 @@
-# Claude Assist MCP
+# Claude Desktop MCP
 
 A Model Context Protocol (MCP) server that enables Claude Code to communicate with Claude Desktop. This server allows Claude Code to send prompts to Claude Desktop and poll for responses.
 
@@ -16,8 +16,8 @@ Inspired by [claude-chatgpt-mcp](https://github.com/syedazharmbnr1/claude-chatgp
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/dpaluy/claude-assist-mcp
-cd claude-apple-mcp
+git clone https://github.com/dpaluy/claude-desktop-mcp
+cd claude-desktop-mcp
 ```
 
 2. Install dependencies:
@@ -39,12 +39,9 @@ Add the following to your Claude Desktop configuration file (`~/Library/Applicat
 ```json
 {
   "mcpServers": {
-    "claude-assist": {
+    "claude-desktop": {
       "command": "node",
-      "args": ["/path/to/claude-apple-mcp/dist/index.js"],
-      "env": {
-        "LOG_LEVEL": "2"
-      }
+      "args": ["/path/to/claude-desktop-mcp/dist/index.js"]
     }
   }
 }

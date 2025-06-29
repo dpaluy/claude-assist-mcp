@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Test script for Claude Assist MCP
+ * Test script for Claude Desktop MCP
  * This script tests the MCP server directly without Claude Desktop
  */
 
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 
-console.log('🧪 Testing Claude Assist MCP Server...\n');
+console.log('🧪 Testing Claude Desktop MCP Server...\n');
 
 // Start the MCP server
 const server = spawn('node', ['dist/index.js'], {
