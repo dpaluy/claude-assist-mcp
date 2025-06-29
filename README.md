@@ -283,13 +283,6 @@ We welcome contributions to Claude Desktop MCP! Whether you're fixing bugs, addi
 - Explain the use case and benefits
 - Be open to feedback and alternative approaches
 
-### Code of Conduct
-
-- Be respectful and inclusive
-- Welcome newcomers and help them get started
-- Focus on constructive criticism
-- Maintain a positive environment
-
 ## License
 
 MIT
