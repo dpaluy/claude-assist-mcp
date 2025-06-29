@@ -201,6 +201,95 @@ The MCP server uses AppleScript to communicate with Claude Desktop:
    - Grant accessibility permissions to your terminal
    - Run the build command with proper permissions
 
+## Contributing
+
+We welcome contributions to Claude Desktop MCP! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
+
+### Getting Started
+
+1. Fork the repository
+2. Clone your fork:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/claude-desktop-mcp
+   cd claude-desktop-mcp
+   ```
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Create a new branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+### Development Workflow
+
+1. Make your changes
+2. Run tests to ensure everything works:
+   ```bash
+   npm test
+   ```
+3. Run linting to maintain code quality:
+   ```bash
+   npm run lint
+   ```
+4. Run type checking:
+   ```bash
+   npm run typecheck
+   ```
+5. Build the project:
+   ```bash
+   npm run build
+   ```
+
+### Code Style Guidelines
+
+- Use TypeScript for all source code
+- Follow the existing code style (enforced by ESLint)
+- Write meaningful commit messages
+- Add tests for new features
+- Update documentation as needed
+
+### Submitting Changes
+
+1. Commit your changes with a descriptive message:
+   ```bash
+   git commit -m "feat: add support for conversation history"
+   ```
+2. Push to your fork:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+3. Create a Pull Request on GitHub
+
+### Pull Request Guidelines
+
+- Provide a clear description of the changes
+- Reference any related issues
+- Ensure all tests pass
+- Update README if adding new features
+- Be responsive to code review feedback
+
+### Reporting Issues
+
+- Use GitHub Issues to report bugs
+- Include macOS version and Node.js version
+- Provide steps to reproduce the issue
+- Include relevant error messages or logs
+
+### Feature Requests
+
+- Open an issue to discuss new features
+- Explain the use case and benefits
+- Be open to feedback and alternative approaches
+
+### Code of Conduct
+
+- Be respectful and inclusive
+- Welcome newcomers and help them get started
+- Focus on constructive criticism
+- Maintain a positive environment
+
 ## License
 
 MIT
