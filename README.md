@@ -14,6 +14,25 @@ Inspired by [claude-chatgpt-mcp](https://github.com/syedazharmbnr1/claude-chatgp
 
 ## Installation
 
+You can install and use this MCP server in two ways:
+
+### Option 1: Using npx (Recommended)
+
+The simplest way to use this server is directly with npx, without any installation:
+
+```json
+{
+  "mcpServers": {
+    "claude-desktop": {
+      "command": "npx",
+      "args": ["claude-desktop-mcp"]
+    }
+  }
+}
+```
+
+### Option 2: Local Installation
+
 1. Clone this repository:
 ```bash
 git clone https://github.com/dpaluy/claude-desktop-mcp
@@ -30,11 +49,7 @@ npm install
 npm run build
 ```
 
-## Configuration
-
-### Claude Desktop Configuration
-
-Add the following to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+4. Configure MCP:
 
 ```json
 {
