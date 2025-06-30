@@ -1,11 +1,11 @@
 {
-  "name": "claude-desktop-mcp",
+  "name": "mcp-claude-desktop",
   "version": "1.0.0",
   "description": "Model Context Protocol (MCP) tool to interact with Claude Desktop on macOS",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "claude-desktop-mcp": "dist/index.js"
+    "mcp-claude-desktop": "dist/index.js"
   },
   "files": [
     "dist",
@@ -32,12 +32,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dpaluy/claude-desktop-mcp.git"
+    "url": "git+https://github.com/dpaluy/mcp-claude-desktop.git"
   },
   "bugs": {
-    "url": "https://github.com/dpaluy/claude-desktop-mcp/issues"
+    "url": "https://github.com/dpaluy/mcp-claude-desktop/issues"
   },
-  "homepage": "https://github.com/dpaluy/claude-desktop-mcp#readme",
+  "homepage": "https://github.com/dpaluy/mcp-claude-desktop#readme",
   "engines": {
     "node": ">=18"
   },

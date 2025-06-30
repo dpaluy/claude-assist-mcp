@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 const server = new Server(
   {
-    name: 'claude-desktop-mcp',
+    name: 'mcp-claude-desktop',
     version: '0.1.0',
   },
   {
@@ -87,12 +87,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  logger.info('Starting Claude Desktop MCP Server...');
+  logger.info('Starting MCP Claude Desktop Server...');
   
   const transport = new StdioServerTransport();
   await server.connect(transport);
   
-  logger.info('Claude Desktop MCP Server started successfully');
+  logger.info('MCP Claude Desktop Server started successfully');
 }
 
 main().catch((error) => {

@@ -1,4 +1,4 @@
-# Claude Desktop MCP
+# MCP Claude Desktop
 
 A Model Context Protocol (MCP) server that enables Claude Code to communicate with Claude Desktop. This server allows Claude Code to send prompts to Claude Desktop and poll for responses.
 
@@ -25,7 +25,7 @@ The simplest way to use this server is directly with npx, without any installati
   "mcpServers": {
     "claude-desktop": {
       "command": "npx",
-      "args": ["claude-desktop-mcp"]
+      "args": ["mcp-claude-desktop"]
     }
   }
 }
@@ -35,8 +35,8 @@ The simplest way to use this server is directly with npx, without any installati
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/dpaluy/claude-desktop-mcp
-cd claude-desktop-mcp
+git clone https://github.com/dpaluy/mcp-claude-desktop
+cd mcp-claude-desktop
 ```
 
 2. Install dependencies:
@@ -56,7 +56,7 @@ npm run build
   "mcpServers": {
     "claude-desktop": {
       "command": "node",
-      "args": ["/path/to/claude-desktop-mcp/dist/index.js"]
+      "args": ["/path/to/mcp-claude-desktop/dist/index.js"]
     }
   }
 }
@@ -218,15 +218,15 @@ The MCP server uses AppleScript to communicate with Claude Desktop:
 
 ## Contributing
 
-We welcome contributions to Claude Desktop MCP! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
+We welcome contributions to MCP Claude Desktop! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
 ### Getting Started
 
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/claude-desktop-mcp
-   cd claude-desktop-mcp
+   git clone https://github.com/YOUR_USERNAME/mcp-claude-desktop
+   cd mcp-claude-desktop
    ```
 3. Install dependencies:
    ```bash
