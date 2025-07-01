@@ -31,7 +31,7 @@ export async function handleClaudeDesktop(args: ClaudeDesktopArgs): Promise<stri
   }
 }
 
-async function askClaude(
+export async function askClaude(
   prompt: string,
   conversationId?: string,
   pollingOptions?: PollingOptions
@@ -325,7 +325,7 @@ function extractClaudeResponse(fullText: string, prompt: string): string | null 
   return null;
 }
 
-async function getConversations(): Promise<ConversationList> {
+export async function getConversations(): Promise<ConversationList> {
   logger.info('Getting Claude Desktop conversations');
   
   const script = `

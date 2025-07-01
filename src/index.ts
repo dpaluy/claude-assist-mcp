@@ -16,21 +16,16 @@ const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 const VERSION = packageJson.version;
 
-// Define the Claude Desktop tool
-const CLAUDE_DESKTOP_TOOL = {
-  name: 'claude_desktop',
-  description: 'Interact with Claude Desktop app on macOS',
+// Define the tools
+const ASK_TOOL = {
+  name: 'ask',
+  description: 'Send a prompt to Claude Desktop and get a response',
   inputSchema: {
     type: 'object',
     properties: {
-      operation: {
-        type: 'string',
-        description: 'Operation to perform',
-        enum: ['ask', 'get_conversations'],
-      },
       prompt: {
         type: 'string',
-        description: 'The prompt to send to Claude Desktop (required for ask operation)',
+        description: 'The prompt to send to Claude Desktop',
       },
       conversationId: {
         type: 'string',
@@ -38,14 +33,23 @@ const CLAUDE_DESKTOP_TOOL = {
       },
       timeout: {
         type: 'number',
-        description: 'Response timeout in milliseconds (default: 30000, max: 300000)',
+        description: 'Response timeout in seconds (default: 30, max: 300)',
       },
       pollingInterval: {
         type: 'number',
-        description: 'Polling interval in milliseconds (default: 1500, min: 500)',
+        description: 'Polling interval in seconds (default: 1.5, min: 0.5, max: 10)',
       },
     },
-    required: ['operation'],
+    required: ['prompt'],
+  },
+};
+
+const GET_CONVERSATIONS_TOOL = {
+  name: 'get_conversations',
+  description: 'Get a list of available conversations in Claude Desktop',
+  inputSchema: {
+    type: 'object',
+    properties: {},
   },
 };
 
@@ -67,42 +71,53 @@ const PollingOptionsSchema = z.object({
 });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [CLAUDE_DESKTOP_TOOL],
+  tools: [ASK_TOOL, GET_CONVERSATIONS_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
 
-    if (name === 'claude_desktop') {
-      const { handleClaudeDesktop } = await import('./tools/claude-desktop.js');
+    if (name === 'ask') {
+      const { askClaude } = await import('./tools/claude-desktop.js');
       const validatedArgs = z.object({
-        operation: z.enum(['ask', 'get_conversations']),
-        prompt: z.string().optional(),
+        prompt: z.string(),
         conversationId: z.string().optional(),
-        timeout: z.number().min(1000).max(300000).optional(),
-        pollingInterval: z.number().min(500).max(10000).optional(),
-        pollingOptions: PollingOptionsSchema.optional(),
+        timeout: z.number().min(1).max(300).optional(),
+        pollingInterval: z.number().min(0.5).max(10).optional(),
       }).parse(args);
 
-      // Build polling options from individual params or use defaults
-      const pollingOptions = validatedArgs.pollingOptions || {
-        timeout: validatedArgs.timeout || 30000,
-        interval: validatedArgs.pollingInterval || 1500,
+      // Convert seconds to milliseconds for internal use
+      const pollingOptions = {
+        timeout: (validatedArgs.timeout || 30) * 1000,
+        interval: (validatedArgs.pollingInterval || 1.5) * 1000,
       };
       
-      const argsWithDefaults = {
-        ...validatedArgs,
-        pollingOptions,
-      };
-      
-      const result = await handleClaudeDesktop(argsWithDefaults);
+      const result = await askClaude(
+        validatedArgs.prompt,
+        validatedArgs.conversationId,
+        pollingOptions
+      );
 
       return {
         content: [
           {
             type: 'text',
-            text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_conversations') {
+      const { getConversations } = await import('./tools/claude-desktop.js');
+      const result = await getConversations();
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
           },
         ],
       };
