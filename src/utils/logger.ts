@@ -26,13 +26,13 @@ export class Logger {
 
   info(message: string, ...args: any[]) {
     if (this.level >= LogLevel.INFO) {
-      console.log(`[INFO] ${message}`, ...args);
+      console.error(`[INFO] ${message}`, ...args);
     }
   }
 
   debug(message: string, ...args: any[]) {
     if (this.level >= LogLevel.DEBUG) {
-      console.log(`[DEBUG] ${message}`, ...args);
+      console.error(`[DEBUG] ${message}`, ...args);
     }
   }
 }

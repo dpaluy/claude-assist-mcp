@@ -114,7 +114,8 @@ async function pollForClaudeResponse(
   const startTime = Date.now();
   let previousText = '';
   let stableCount = 0;
-  const requiredStableChecks = 3;
+  const requiredStableChecks = 2; // Reduced for faster detection
+  let lastResponseText = '';
   
   logger.info(`Polling for Claude response: ${requestId}`);
   
@@ -124,24 +125,61 @@ async function pollForClaudeResponse(
         tell application "System Events"
           tell process "Claude"
             set allText to ""
+            set messageTexts to {}
             try
               set frontWin to front window
-              set allUIElements to entire contents of frontWin
-              set conversationText to {}
               
-              repeat with elem in allUIElements
-                try
-                  if (role of elem) is "AXStaticText" then
-                    set textContent to value of elem as string
-                    if textContent is not missing value then
-                      set end of conversationText to textContent
+              -- Try multiple approaches to find messages
+              -- Approach 1: Look for specific message containers
+              try
+                set messageGroups to groups of frontWin whose role is "AXGroup"
+                repeat with msgGroup in messageGroups
+                  try
+                    set staticTexts to static texts of msgGroup
+                    repeat with txt in staticTexts
+                      set txtValue to value of txt
+                      if txtValue is not missing value and length of txtValue > 0 then
+                        set end of messageTexts to txtValue
+                      end if
+                    end repeat
+                  end try
+                end repeat
+              end try
+              
+              -- Approach 2: Look for text in scroll areas
+              try
+                set scrollAreas to scroll areas of frontWin
+                repeat with scrollArea in scrollAreas
+                  try
+                    set staticTexts to static texts of scrollArea
+                    repeat with txt in staticTexts
+                      set txtValue to value of txt
+                      if txtValue is not missing value and length of txtValue > 0 then
+                        set end of messageTexts to txtValue
+                      end if
+                    end repeat
+                  end try
+                end repeat
+              end try
+              
+              -- Approach 3: Get all static texts (fallback)
+              if (count of messageTexts) is 0 then
+                set allUIElements to entire contents of frontWin
+                repeat with elem in allUIElements
+                  try
+                    if (role of elem) is "AXStaticText" then
+                      set textContent to value of elem as string
+                      if textContent is not missing value and length of textContent > 0 then
+                        set end of messageTexts to textContent
+                      end if
                     end if
-                  end if
-                end try
-              end repeat
+                  end try
+                end repeat
+              end if
               
+              -- Join all texts
               set AppleScript's text item delimiters to linefeed
-              set allText to conversationText as text
+              set allText to messageTexts as text
             end try
             return allText
           end tell
@@ -152,31 +190,46 @@ async function pollForClaudeResponse(
     try {
       const currentText = await runAppleScript(script);
       
-      // Check if text has stabilized
-      if (currentText === previousText) {
+      // Look for Claude's response more intelligently
+      const response = extractClaudeResponse(currentText, originalPrompt);
+      
+      if (response && response !== lastResponseText) {
+        // New response text detected
+        lastResponseText = response;
+        stableCount = 0;
+      } else if (response && response === lastResponseText) {
+        // Response text hasn't changed
         stableCount++;
         if (stableCount >= requiredStableChecks) {
-          // Extract Claude's response
-          const response = extractClaudeResponse(currentText, originalPrompt);
-          if (response) {
+          // Check if we're not seeing typing indicators
+          if (!currentText.includes('▍') && 
+              !currentText.includes('Claude is typing') &&
+              !currentText.includes('Thinking')) {
             logger.info(`Claude response received: ${requestId}`);
             return response;
           }
         }
-      } else {
-        stableCount = 0;
-        previousText = currentText;
       }
       
-      // Check for typing indicators
-      if (currentText.includes('▍') || currentText.includes('Claude is typing')) {
+      // Reset stable count if we see typing indicators
+      if (currentText.includes('▍') || 
+          currentText.includes('Claude is typing') ||
+          currentText.includes('Thinking')) {
         stableCount = 0;
       }
+      
+      previousText = currentText;
     } catch (error) {
       logger.warn(`Poll attempt failed: ${error}`);
     }
     
     await new Promise(resolve => setTimeout(resolve, options.interval));
+  }
+  
+  // If we have a last response, return it even if timeout
+  if (lastResponseText) {
+    logger.info(`Returning last captured response: ${requestId}`);
+    return lastResponseText;
   }
   
   logger.warn(`Response timed out: ${requestId}`);
@@ -188,47 +241,84 @@ function extractClaudeResponse(fullText: string, prompt: string): string | null 
     return null;
   }
   
-  // Try to find where the prompt ends and response begins
-  const promptIndex = fullText.indexOf(prompt);
-  if (promptIndex !== -1) {
-    const afterPrompt = fullText.substring(promptIndex + prompt.length).trim();
-    
-    // Look for Claude's response pattern
-    const responsePatterns = [
-      /^Claude[:\s]+(.+)$/s,
-      /^Assistant[:\s]+(.+)$/s,
-      /^(.+)$/s // Fallback to any text after prompt
-    ];
-    
-    for (const pattern of responsePatterns) {
-      const match = afterPrompt.match(pattern);
-      if (match && match[1]) {
-        const response = match[1].trim();
-        
-        // Clean up UI elements
-        const cleaned = response
-          .replace(/Copy|Share|More|Edit/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        if (cleaned.length > 0) {
-          return cleaned;
-        }
-      }
+  // Clean the text first
+  const cleanedText = fullText
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+  
+  // Split into lines for better processing
+  const lines = cleanedText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  
+  // Find the prompt line
+  let promptLineIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(prompt) || prompt.includes(lines[i])) {
+      promptLineIndex = i;
+      break;
     }
   }
   
-  // If we can't find the prompt, look for the last substantial text block
-  const lines = fullText.split('\n').filter(line => line.trim().length > 0);
-  if (lines.length > 0) {
-    // Skip UI elements and find actual content
-    const contentLines = lines.filter(line => 
-      !line.match(/^(Copy|Share|More|Edit|New chat)$/i) &&
-      line.length > 10
-    );
+  // Collect all lines after the prompt
+  const responseLines: string[] = [];
+  const startIndex = promptLineIndex !== -1 ? promptLineIndex + 1 : 0;
+  
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
     
-    if (contentLines.length > 0) {
-      return contentLines.join('\n');
+    // Skip UI elements and metadata
+    if (line.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday|\d+:\d+\s*(AM|PM))$/i)) {
+      continue;
+    }
+    
+    // Skip timestamps
+    if (line.match(/^\d{1,2}:\d{2}\s*(AM|PM|am|pm)$/)) {
+      continue;
+    }
+    
+    // Skip user indicators
+    if (line.match(/^(You|User|Me|DP)$/i)) {
+      continue;
+    }
+    
+    // Skip typing indicators
+    if (line.includes('▍') || line.includes('Claude is typing') || line === 'Thinking') {
+      continue;
+    }
+    
+    // Check if this might be the start of Claude's response
+    if (line.match(/^(Claude|Assistant|AI)$/i)) {
+      // Skip this line but include everything after
+      continue;
+    }
+    
+    // Include substantial content
+    if (line.length > 3) {
+      responseLines.push(line);
+    }
+  }
+  
+  // Join the response lines
+  let response = responseLines.join('\n').trim();
+  
+  // Additional cleanup
+  response = response
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/([.!?])\s*([A-Z])/g, '$1\n$2') // Add line breaks after sentences
+    .trim();
+  
+  // Return if we have meaningful content
+  if (response.length > 10) {
+    return response;
+  }
+  
+  // Fallback: Look for any substantial text block in the latter half
+  const halfwayPoint = Math.floor(lines.length / 2);
+  for (let i = lines.length - 1; i >= halfwayPoint; i--) {
+    const line = lines[i];
+    if (line.length > 20 && 
+        !line.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday)$/i)) {
+      return line;
     }
   }
   

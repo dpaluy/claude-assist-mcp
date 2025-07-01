@@ -4,31 +4,20 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-  Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-
-import { logger } from './utils/logger.js';
 import { z } from 'zod';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const server = new Server(
-  {
-    name: 'mcp-claude-desktop',
-    version: '0.1.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
+// Get package.json version
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
+const VERSION = packageJson.version;
 
-const PollingOptionsSchema = z.object({
-  timeout: z.number().default(30000).describe('Timeout in milliseconds'),
-  interval: z.number().default(2000).describe('Polling interval in milliseconds'),
-});
-
-// Define the Claude Desktop tool in JSON Schema format
-const CLAUDE_DESKTOP_TOOL: Tool = {
+// Define the Claude Desktop tool
+const CLAUDE_DESKTOP_TOOL = {
   name: 'claude_desktop',
   description: 'Interact with Claude Desktop app on macOS',
   inputSchema: {
@@ -47,64 +36,68 @@ const CLAUDE_DESKTOP_TOOL: Tool = {
         type: 'string',
         description: 'Optional conversation ID to continue a specific conversation',
       },
-      pollingOptions: {
-        type: 'object',
-        description: 'Polling configuration options',
-        properties: {
-          timeout: {
-            type: 'number',
-            description: 'Timeout in milliseconds',
-            default: 30000,
-          },
-          interval: {
-            type: 'number',
-            description: 'Polling interval in milliseconds',
-            default: 2000,
-          },
-        },
-      },
     },
     required: ['operation'],
   },
 };
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [CLAUDE_DESKTOP_TOOL],
-  };
+const server = new Server(
+  {
+    name: 'mcp-claude-desktop',
+    version: VERSION,
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+const PollingOptionsSchema = z.object({
+  timeout: z.number().default(60000).describe('Timeout in milliseconds'),
+  interval: z.number().default(1500).describe('Polling interval in milliseconds'),
 });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [CLAUDE_DESKTOP_TOOL],
+}));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
 
-    switch (name) {
-      case 'claude_desktop': {
-        const { handleClaudeDesktop } = await import('./tools/claude-desktop.js');
-        const validatedArgs = z.object({
-          operation: z.enum(['ask', 'get_conversations']),
-          prompt: z.string().optional(),
-          conversationId: z.string().optional(),
-          pollingOptions: PollingOptionsSchema.optional(),
-        }).parse(args);
+    if (name === 'claude_desktop') {
+      const { handleClaudeDesktop } = await import('./tools/claude-desktop.js');
+      const validatedArgs = z.object({
+        operation: z.enum(['ask', 'get_conversations']),
+        prompt: z.string().optional(),
+        conversationId: z.string().optional(),
+        pollingOptions: PollingOptionsSchema.optional(),
+      }).parse(args);
 
-        const result = await handleClaudeDesktop(validatedArgs);
+      // Use default polling options if not provided
+      const argsWithDefaults = {
+        ...validatedArgs,
+        pollingOptions: validatedArgs.pollingOptions || {
+          timeout: 60000,
+          interval: 1500,
+        },
+      };
+      
+      const result = await handleClaudeDesktop(argsWithDefaults);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+          },
+        ],
+      };
     }
+
+    throw new Error(`Unknown tool: ${name}`);
   } catch (error) {
-    logger.error('Tool execution failed:', error);
     return {
       content: [
         {
@@ -117,16 +110,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-async function main() {
-  logger.info('Starting MCP Claude Desktop Server...');
-  
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  
-  logger.info('MCP Claude Desktop Server started successfully');
-}
-
-main().catch((error) => {
-  logger.error('Failed to start server:', error);
-  process.exit(1);
-});
+const transport = new StdioServerTransport();
+await server.connect(transport);
+console.error('Claude Desktop MCP Server running on stdio');
