@@ -36,6 +36,14 @@ const CLAUDE_DESKTOP_TOOL = {
         type: 'string',
         description: 'Optional conversation ID to continue a specific conversation',
       },
+      timeout: {
+        type: 'number',
+        description: 'Response timeout in milliseconds (default: 30000, max: 300000)',
+      },
+      pollingInterval: {
+        type: 'number',
+        description: 'Polling interval in milliseconds (default: 1500, min: 500)',
+      },
     },
     required: ['operation'],
   },
@@ -54,7 +62,7 @@ const server = new Server(
 );
 
 const PollingOptionsSchema = z.object({
-  timeout: z.number().default(60000).describe('Timeout in milliseconds'),
+  timeout: z.number().default(30000).describe('Timeout in milliseconds'),
   interval: z.number().default(1500).describe('Polling interval in milliseconds'),
 });
 
@@ -72,16 +80,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         operation: z.enum(['ask', 'get_conversations']),
         prompt: z.string().optional(),
         conversationId: z.string().optional(),
+        timeout: z.number().min(1000).max(300000).optional(),
+        pollingInterval: z.number().min(500).max(10000).optional(),
         pollingOptions: PollingOptionsSchema.optional(),
       }).parse(args);
 
-      // Use default polling options if not provided
+      // Build polling options from individual params or use defaults
+      const pollingOptions = validatedArgs.pollingOptions || {
+        timeout: validatedArgs.timeout || 30000,
+        interval: validatedArgs.pollingInterval || 1500,
+      };
+      
       const argsWithDefaults = {
         ...validatedArgs,
-        pollingOptions: validatedArgs.pollingOptions || {
-          timeout: 60000,
-          interval: 1500,
-        },
+        pollingOptions,
       };
       
       const result = await handleClaudeDesktop(argsWithDefaults);

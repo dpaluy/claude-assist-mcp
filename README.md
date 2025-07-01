@@ -90,7 +90,9 @@ General-purpose interaction with Claude Desktop app. Supports two operations:
   - `operation`: "ask" (required)
   - `prompt`: The text to send to Claude Desktop (required)
   - `conversationId`: Optional ID to continue a specific conversation
-  - `pollingOptions`: Optional timeout and interval settings
+  - `timeout`: Response timeout in milliseconds (optional, default: 30000, max: 300000)
+  - `pollingInterval`: How often to check for response in milliseconds (optional, default: 1500, min: 500)
+  - `pollingOptions`: Advanced polling configuration (optional, overrides timeout/pollingInterval)
 
 #### `get_conversations` operation
 - **Purpose**: Retrieve a list of available Claude Desktop conversations
@@ -105,14 +107,25 @@ Once configured, Claude Code can use the MCP in various ways:
 ### General Purpose Usage
 
 ```typescript
-// Ask Claude Desktop a question
+// Ask Claude Desktop a question with default timeout (30s)
 const response = await mcp.callTool('claude_desktop', {
   operation: 'ask',
-  prompt: 'Explain the concept of dependency injection in software engineering',
-  pollingOptions: {
-    timeout: 30000,
-    interval: 2000
-  }
+  prompt: 'Explain the concept of dependency injection in software engineering'
+});
+
+// Ask with a shorter timeout for quick responses (10s)
+const quickResponse = await mcp.callTool('claude_desktop', {
+  operation: 'ask',
+  prompt: 'What is 2+2?',
+  timeout: 10000,
+  pollingInterval: 500  // Check every 500ms
+});
+
+// Ask with a longer timeout for complex questions (2 minutes)
+const complexResponse = await mcp.callTool('claude_desktop', {
+  operation: 'ask',
+  prompt: 'Write a detailed analysis of quantum computing applications',
+  timeout: 120000  // 2 minutes
 });
 
 // Get list of conversations
@@ -171,9 +184,17 @@ General-purpose interaction with Claude Desktop.
 - `operation` (required): "ask" or "get_conversations"
 - `prompt` (string, required for "ask"): The prompt to send
 - `conversationId` (string, optional): Continue a specific conversation
-- `pollingOptions` (optional):
-  - `timeout` (number): Max wait time in ms (default: 30000)
-  - `interval` (number): Poll interval in ms (default: 2000)
+- `timeout` (number, optional): Response timeout in milliseconds
+  - Default: 30000 (30 seconds)
+  - Minimum: 1000 (1 second)
+  - Maximum: 300000 (5 minutes)
+- `pollingInterval` (number, optional): How often to check for response
+  - Default: 1500 (1.5 seconds)
+  - Minimum: 500 (0.5 seconds)
+  - Maximum: 10000 (10 seconds)
+- `pollingOptions` (optional): Advanced configuration (overrides timeout/pollingInterval)
+  - `timeout` (number): Max wait time in ms
+  - `interval` (number): Poll interval in ms
 
 **Response for "ask":**
 ```
@@ -208,7 +229,9 @@ The MCP server uses AppleScript to communicate with Claude Desktop:
    - Try running the server with higher log level: `LOG_LEVEL=3`
 
 2. **"Response timed out"**
-   - Increase the timeout in polling options
+   - Increase the timeout parameter: `timeout: 60000` (60 seconds)
+   - For complex queries, use longer timeouts: `timeout: 120000` (2 minutes)
+   - Reduce polling interval for faster detection: `pollingInterval: 500`
    - Check if Claude Desktop is responding normally
    - Ensure the system isn't under heavy load
 
