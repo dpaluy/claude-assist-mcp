@@ -77,25 +77,21 @@ npm run build
 4. Add Terminal (or your terminal app) to the allowed apps
 5. Restart your terminal
 
-## MCP Commands
+## MCP Tools
 
-This MCP server provides one main command:
+This MCP server provides two tools:
 
-### `claude_desktop`
-General-purpose interaction with Claude Desktop app. Supports two operations:
-
-#### `ask` operation
-- **Purpose**: Send any prompt to Claude Desktop and get a response
+### `ask`
+- **Purpose**: Send a prompt to Claude Desktop and get a response
 - **Parameters**:
-  - `operation`: "ask" (required)
   - `prompt`: The text to send to Claude Desktop (required)
   - `conversationId`: Optional ID to continue a specific conversation
-  - `pollingOptions`: Optional timeout and interval settings
+  - `timeout`: Response timeout in seconds (optional, default: 30, max: 300)
+  - `pollingInterval`: How often to check for response in seconds (optional, default: 1.5, min: 0.5)
 
-#### `get_conversations` operation
-- **Purpose**: Retrieve a list of available Claude Desktop conversations
-- **Parameters**:
-  - `operation`: "get_conversations" (required)
+### `get_conversations`
+- **Purpose**: Get a list of available conversations in Claude Desktop
+- **Parameters**: None
 
 
 ## Usage
@@ -104,33 +100,37 @@ Once configured, Claude Code can use the MCP in various ways:
 
 ### General Purpose Usage
 
-```typescript
-// Ask Claude Desktop a question
-const response = await mcp.callTool('claude_desktop', {
-  operation: 'ask',
-  prompt: 'Explain the concept of dependency injection in software engineering',
-  pollingOptions: {
-    timeout: 30000,
-    interval: 2000
-  }
-});
+When Claude uses these tools, it will call them with parameters like:
 
-// Get list of conversations
-const conversations = await mcp.callTool('claude_desktop', {
-  operation: 'get_conversations'
-});
-```
+**Basic usage:**
+- Tool: `ask`
+- Parameters: `{ "prompt": "What is dependency injection?" }`
 
-### Example in Claude Code
+**With custom timeout:**
+- Tool: `ask`
+- Parameters: `{ "prompt": "Explain quantum computing", "timeout": 120 }`
 
-When using Claude Code, you can interact with Claude Desktop:
+**With both timeout and polling interval:**
+- Tool: `ask`
+- Parameters: `{ "prompt": "Quick question", "timeout": 10, "pollingInterval": 0.5 }`
 
-**General question:**
-```
-Ask Claude Desktop: What are the best practices for error handling in Python?
-```
+**Get conversations:**
+- Tool: `get_conversations`
+- Parameters: `{}`
 
-Claude Code will automatically use the MCP command to send your prompt to Claude Desktop.
+### How to Use in Claude
+
+Once the MCP server is configured and running, you can use these tools directly in Claude:
+
+**Basic usage:**
+- "Use the ask tool to ask Claude Desktop: What are the best practices for error handling in Python?"
+- "Use get_conversations to list all my Claude Desktop conversations"
+
+**With custom timeout:**
+- "Use the ask tool with timeout 60 to ask Claude Desktop: Explain B+ tree implementation"
+- "Use ask with timeout 10 and pollingInterval 0.5 to ask Claude Desktop: What is 2+2?"
+
+**Important:** The MCP server configuration (shown above) only tells Claude how to start the server. The timeout and pollingInterval parameters are specified when you use the tool in Claude, not in the server configuration file.
 
 ## Development
 
@@ -162,25 +162,35 @@ npm run typecheck
 
 ### Tools
 
-#### `claude_desktop`
+#### `ask`
 
-General-purpose interaction with Claude Desktop.
+Send a prompt to Claude Desktop and get a response.
 
 **Parameters:**
 
-- `operation` (required): "ask" or "get_conversations"
-- `prompt` (string, required for "ask"): The prompt to send
+- `prompt` (string, required): The prompt to send
 - `conversationId` (string, optional): Continue a specific conversation
-- `pollingOptions` (optional):
-  - `timeout` (number): Max wait time in ms (default: 30000)
-  - `interval` (number): Poll interval in ms (default: 2000)
+- `timeout` (number, optional): Response timeout in seconds
+  - Default: 30 seconds
+  - Minimum: 1 second
+  - Maximum: 300 seconds (5 minutes)
+- `pollingInterval` (number, optional): How often to check for response in seconds
+  - Default: 1.5 seconds
+  - Minimum: 0.5 seconds
+  - Maximum: 10 seconds
 
-**Response for "ask":**
+**Response:**
 ```
 String containing Claude's response
 ```
 
-**Response for "get_conversations":**
+#### `get_conversations`
+
+Get a list of available conversations in Claude Desktop.
+
+**Parameters:** None
+
+**Response:**
 ```typescript
 {
   conversations: string[];
@@ -208,7 +218,9 @@ The MCP server uses AppleScript to communicate with Claude Desktop:
    - Try running the server with higher log level: `LOG_LEVEL=3`
 
 2. **"Response timed out"**
-   - Increase the timeout in polling options
+   - Increase the timeout parameter: `timeout: 60` (60 seconds)
+   - For complex queries, use longer timeouts: `timeout: 120` (2 minutes)
+   - Reduce polling interval for faster detection: `pollingInterval: 0.5`
    - Check if Claude Desktop is responding normally
    - Ensure the system isn't under heavy load
 
