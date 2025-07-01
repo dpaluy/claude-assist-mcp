@@ -1,6 +1,6 @@
 {
   "name": "mcp-claude-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Model Context Protocol (MCP) tool to interact with Claude Desktop on macOS",
   "main": "dist/index.js",
   "type": "module",
