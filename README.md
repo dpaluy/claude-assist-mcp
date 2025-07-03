@@ -132,6 +132,90 @@ Once the MCP server is configured and running, you can use these tools directly 
 
 **Important:** The MCP server configuration (shown above) only tells Claude how to start the server. The timeout and pollingInterval parameters are specified when you use the tool in Claude, not in the server configuration file.
 
+## Claude Commands Integration
+
+Claude Commands allow you to create reusable workflows that combine MCP tools. This project works seamlessly with Claude Commands to enable powerful automation.
+
+### Example: Code Peer Review Command
+
+We've included an example Claude Command that demonstrates how to use MCP Claude Desktop for automated code reviews. The command uses git to analyze recent changes and sends them to Claude Desktop for peer review feedback.
+
+#### Setup
+
+1. Copy the example command to your Claude Commands directory:
+   ```bash
+   cp examples/claude-peer-review.md ~/.claude/commands/
+   ```
+
+2. The command will be available in Claude Code as `/claude-peer-review`
+
+#### Usage
+
+The peer review command accepts up to 3 arguments:
+- **description**: What changes to review (e.g., "authentication fix")  
+- **polling_interval**: How often to check for response (default: 1.5s)
+- **timeout**: Maximum wait time for response (default: 30s)
+
+Examples:
+```bash
+# Review most recent commit with defaults
+/claude-peer-review
+
+# Review with description
+/claude-peer-review "bug fix for user login"
+
+# Custom polling interval (2 seconds)
+/claude-peer-review "API update" 2
+
+# Custom timeout for complex reviews (2 minutes)
+/claude-peer-review "major refactor" 1.5 120
+```
+
+#### How It Works
+
+1. **Git Integration**: The command automatically fetches:
+   - Current git status
+   - Recent commit statistics
+   - Full diff of changes
+   - Current branch name
+
+2. **Claude Desktop Review**: Sends the changes to Claude Desktop with specific review questions:
+   - Code appropriateness and implementation quality
+   - Security concerns or potential bugs
+   - Code quality and best practices
+   - Suggestions for improvements
+
+3. **Response Handling**: Uses the MCP server's polling mechanism to wait for Claude's response
+
+4. **Summary Generation**: Provides a structured summary of:
+   - Changes reviewed
+   - Claude's feedback
+   - Actions taken based on feedback
+   - Final review status
+
+### Creating Your Own Commands
+
+You can create custom Claude Commands that leverage MCP Claude Desktop. Commands should:
+
+1. Include the tools in the frontmatter:
+   ```yaml
+   ---
+   allowed-tools: mcp__claude-desktop__ask, mcp__claude-desktop__get_conversations
+   ---
+   ```
+
+2. Use the MCP tools with appropriate parameters:
+   ```
+   mcp__claude-desktop__ask
+   prompt: "Your prompt here"
+   timeout: 60
+   pollingInterval: 2
+   ```
+
+3. Handle timeouts gracefully and suggest longer timeouts for complex queries
+
+See the [example command](examples/claude-peer-review.md) for a complete implementation.
+
 ## Development
 
 ### Running in Development Mode
