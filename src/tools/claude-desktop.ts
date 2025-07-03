@@ -56,6 +56,13 @@ export async function askClaude(
   const escapedOriginalClipboard = escapeAppleScriptString(originalClipboard);
   
   const script = `
+    -- First check if Claude is running
+    tell application "System Events"
+      if not (exists process "Claude") then
+        return "Error: Claude Desktop is not running"
+      end if
+    end tell
+    
     tell application "Claude"
       activate
       delay 1
@@ -63,47 +70,69 @@ export async function askClaude(
       tell application "System Events"
         tell process "Claude"
           set frontmost to true
-          delay 0.5
           
-          ${conversationId ? `
-          -- Try to select specific conversation
+          -- Wait for window to be available
+          set windowExists to false
+          repeat 10 times
+            try
+              if (count of windows) > 0 then
+                set windowExists to true
+                exit repeat
+              end if
+            end try
+            delay 0.5
+          end repeat
+          
+          if not windowExists then
+            return "Error: No Claude window available"
+          end if
+          
+          -- Now safely access window 1
           try
-            click button "${conversationId}" of group 1 of group 1 of window 1
+            ${conversationId ? `
+            -- Try to select specific conversation
+            try
+              click button "${conversationId}" of group 1 of group 1 of window 1
+              delay 1
+            end try
+            ` : `
+            -- Create new conversation
+            keystroke "n" using command down
+            delay 1.5
+            `}
+            
+            -- Find the text input area and click it
+            try
+              -- Look for the main text input field
+              set textAreas to text areas of window 1
+              if (count of textAreas) > 0 then
+                click last text area of window 1
+                delay 0.5
+              end if
+            end try
+            
+            -- Clear any existing text
+            keystroke "a" using {command down}
+            delay 0.2
+            key code 51 -- delete key
+            delay 0.5
+            
+            -- Set clipboard to prompt text
+            set the clipboard to "${escapedPrompt}"
+            delay 0.2
+            
+            -- Paste the prompt
+            keystroke "v" using {command down}
+            delay 0.5
+            
+            -- Send the message
+            key code 36 -- return key
             delay 1
+            
+            return "Success"
+          on error errMsg
+            return "Error: " & errMsg
           end try
-          ` : `
-          -- Create new conversation
-          keystroke "n" using command down
-          delay 1.5
-          `}
-          
-          -- Find the text input area and click it
-          try
-            -- Look for the main text input field
-            set textAreas to text areas of window 1
-            if (count of textAreas) > 0 then
-              click last text area of window 1
-              delay 0.5
-            end if
-          end try
-          
-          -- Clear any existing text
-          keystroke "a" using {command down}
-          delay 0.2
-          key code 51 -- delete key
-          delay 0.5
-          
-          -- Set clipboard to prompt text
-          set the clipboard to "${escapedPrompt}"
-          delay 0.2
-          
-          -- Paste the prompt
-          keystroke "v" using {command down}
-          delay 0.5
-          
-          -- Send the message
-          key code 36 -- return key
-          delay 1
         end tell
       end tell
     end tell
@@ -111,8 +140,13 @@ export async function askClaude(
   
   try {
     logger.debug('Executing AppleScript to send prompt');
-    await runAppleScript(script);
-    logger.debug('AppleScript executed successfully');
+    const result = await runAppleScript(script);
+    logger.debug('AppleScript result:', result);
+    
+    // Check if the script returned an error
+    if (result.startsWith('Error:')) {
+      throw new Error(result);
+    }
     
     // Give Claude a moment to start processing
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -153,12 +187,23 @@ async function pollForClaudeResponse(
   
   while (Date.now() - startTime < options.timeout) {
     const script = `
+      tell application "System Events"
+        if not (exists process "Claude") then
+          return "Error: Claude process not found"
+        end if
+      end tell
+      
       tell application "Claude"
         tell application "System Events"
           tell process "Claude"
             set allText to ""
             set messageTexts to {}
             try
+              -- Check if window exists
+              if (count of windows) = 0 then
+                return "Error: No Claude window"
+              end if
+              
               set frontWin to front window
               
               -- Get all text from the window with better filtering
@@ -252,13 +297,25 @@ async function pollForClaudeResponse(
     return lastResponseText;
   }
   
-  logger.warn(`Response timed out: ${requestId}`);
-  return 'Response timed out. Claude may still be processing.';
+  logger.warn(`Unable to read Claude response: ${requestId}`);
+  return `Message sent to Claude Desktop successfully. 
+
+Note: Due to Claude Desktop's architecture, responses cannot be read programmatically through this MCP integration. 
+
+The prompt "${originalPrompt}" has been sent and Claude should be responding in the desktop app. Please check the Claude Desktop window directly for the response.
+
+This is a known limitation of automating Electron-based applications.`;
 }
 
 function extractClaudeResponse(fullText: string, prompt: string): string | null {
   if (!fullText || fullText.length === 0) {
     logger.debug('No text to extract from');
+    return null;
+  }
+  
+  // Check for error messages from our AppleScript
+  if (fullText.startsWith('Error:')) {
+    logger.debug('Received error from AppleScript');
     return null;
   }
   
@@ -270,54 +327,10 @@ function extractClaudeResponse(fullText: string, prompt: string): string | null 
     .replace(/\r/g, '\n')
     .trim();
   
-  // Split into meaningful chunks (double newline separated)
-  const chunks = cleanedText.split(/\n\n+/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0);
-  logger.debug(`Found ${chunks.length} text chunks`);
+  // Due to Claude Desktop's architecture, we cannot reliably read responses
+  // through accessibility APIs. This is a known limitation.
+  logger.warn('Claude Desktop response reading is not currently supported due to UI limitations');
   
-  // Find the prompt in the chunks
-  let promptChunkIndex = -1;
-  for (let i = 0; i < chunks.length; i++) {
-    if (chunks[i].includes(prompt)) {
-      promptChunkIndex = i;
-      logger.debug(`Found prompt at chunk index ${i}`);
-      break;
-    }
-  }
-  
-  // If we found the prompt, look for the response after it
-  if (promptChunkIndex !== -1 && promptChunkIndex < chunks.length - 1) {
-    // Get all chunks after the prompt
-    const responseChunks = chunks.slice(promptChunkIndex + 1);
-    
-    // Filter out UI elements and join
-    const filteredChunks = responseChunks.filter(chunk => {
-      // Skip if it's a known UI element or too short
-      if (chunk.length < 10) return false;
-      if (chunk.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday|Claude|You|DP|User)$/i)) return false;
-      if (chunk.match(/^\d{1,2}:\d{2}\s*(AM|PM)$/i)) return false;
-      if (chunk.includes('▍') || chunk.includes('Claude is typing') || chunk === 'Thinking') return false;
-      
-      return true;
-    });
-    
-    if (filteredChunks.length > 0) {
-      const response = filteredChunks.join('\n\n').trim();
-      logger.debug(`Extracted response: ${response.substring(0, 100)}...`);
-      return response;
-    }
-  }
-  
-  // Fallback: Look for any substantial text that's not UI elements
-  const allLines = cleanedText.split('\n').map(l => l.trim()).filter(l => l.length > 20);
-  for (const line of allLines) {
-    if (!line.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday|How can I help|Connect apps|Projects|Artifacts)$/i) &&
-        !line.includes(prompt)) {
-      logger.debug(`Fallback response: ${line.substring(0, 100)}...`);
-      return line;
-    }
-  }
-  
-  logger.debug('No response found in text');
   return null;
 }
 

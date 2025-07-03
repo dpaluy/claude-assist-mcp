@@ -132,6 +132,22 @@ Once the MCP server is configured and running, you can use these tools directly 
 
 **Important:** The MCP server configuration (shown above) only tells Claude how to start the server. The timeout and pollingInterval parameters are specified when you use the tool in Claude, not in the server configuration file.
 
+## Known Limitations
+
+### Response Reading
+Due to Claude Desktop's Electron-based architecture, this MCP integration **cannot read Claude's responses** programmatically. The tool can successfully:
+- ✅ Send prompts to Claude Desktop
+- ✅ Create new conversations
+- ✅ Activate and focus the Claude window
+- ❌ Read Claude's responses back
+
+This is a limitation of how Electron apps expose UI elements through accessibility APIs. When you use the `ask` tool, you'll receive a confirmation that the message was sent, but you'll need to check the Claude Desktop window directly to see the response.
+
+### Workarounds
+1. **Use Claude's API**: For programmatic access to responses, consider using Claude's API directly instead of desktop automation
+2. **Manual verification**: After sending a prompt, manually check the Claude Desktop window for the response
+3. **One-way automation**: Use this tool for scenarios where you only need to send prompts without reading responses
+
 ## Claude Commands Integration
 
 Claude Commands allow you to create reusable workflows that combine MCP tools. This project works seamlessly with Claude Commands to enable powerful automation.
@@ -152,7 +168,7 @@ We've included an example Claude Command that demonstrates how to use MCP Claude
 #### Usage
 
 The peer review command accepts up to 3 arguments:
-- **description**: What changes to review (e.g., "authentication fix")  
+- **description**: What changes to review (e.g., "authentication fix")
 - **polling_interval**: How often to check for response (default: 1.5s)
 - **timeout**: Maximum wait time for response (default: 30s)
 

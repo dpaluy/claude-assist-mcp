@@ -39,3 +39,6 @@ temp/
 # Claude Desktop config (local)
 .claude/*.local.json
 
+# Test files in root (use scripts/ directory instead)
+/test-*.js
+

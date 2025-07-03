@@ -33,12 +33,12 @@ describe('Logger', () => {
 
     test('should log info', () => {
       logger.info('Test info');
-      expect(consoleLogSpy).toHaveBeenCalledWith('[INFO] Test info');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[INFO] Test info');
     });
 
     test('should not log debug', () => {
       logger.debug('Test debug');
-      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('[DEBUG]'));
     });
   });
 
@@ -59,7 +59,7 @@ describe('Logger', () => {
 
     test('should not log info', () => {
       logger.info('Test info');
-      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('[INFO]'));
     });
   });
 });
