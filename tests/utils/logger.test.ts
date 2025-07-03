@@ -4,12 +4,14 @@ describe('Logger', () => {
   let logger: Logger;
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
-  let consoleLogSpy: jest.SpyInstance;
+  let consoleInfoSpy: jest.SpyInstance;
+  let consoleDebugSpy: jest.SpyInstance;
 
   beforeEach(() => {
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+    consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation();
+    consoleDebugSpy = jest.spyOn(console, 'debug').mockImplementation();
   });
 
   afterEach(() => {
@@ -33,12 +35,12 @@ describe('Logger', () => {
 
     test('should log info', () => {
       logger.info('Test info');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[INFO] Test info');
+      expect(consoleInfoSpy).toHaveBeenCalledWith('[INFO] Test info');
     });
 
     test('should not log debug', () => {
       logger.debug('Test debug');
-      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('[DEBUG]'));
+      expect(consoleDebugSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -59,7 +61,7 @@ describe('Logger', () => {
 
     test('should not log info', () => {
       logger.info('Test info');
-      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('[INFO]'));
+      expect(consoleInfoSpy).not.toHaveBeenCalled();
     });
   });
 });

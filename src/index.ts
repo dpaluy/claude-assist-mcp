@@ -4,8 +4,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -16,42 +16,9 @@ const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 const VERSION = packageJson.version;
 
-// Define the tools
-const ASK_TOOL = {
-  name: 'ask',
-  description: 'Send a prompt to Claude Desktop and get a response',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      prompt: {
-        type: 'string',
-        description: 'The prompt to send to Claude Desktop',
-      },
-      conversationId: {
-        type: 'string',
-        description: 'Optional conversation ID to continue a specific conversation',
-      },
-      timeout: {
-        type: 'number',
-        description: 'Response timeout in seconds (default: 30, max: 300)',
-      },
-      pollingInterval: {
-        type: 'number',
-        description: 'Polling interval in seconds (default: 1.5, min: 0.5, max: 10)',
-      },
-    },
-    required: ['prompt'],
-  },
-};
-
-const GET_CONVERSATIONS_TOOL = {
-  name: 'get_conversations',
-  description: 'Get a list of available conversations in Claude Desktop',
-  inputSchema: {
-    type: 'object',
-    properties: {},
-  },
-};
+import { getAllTools, getToolByName } from './tools/registry.js';
+import { ToolHandler } from './handlers/tool-handler.js';
+import { logger } from './utils/logger.js';
 
 const server = new Server(
   {
@@ -65,66 +32,27 @@ const server = new Server(
   }
 );
 
-const PollingOptionsSchema = z.object({
-  timeout: z.number().default(30000).describe('Timeout in milliseconds'),
-  interval: z.number().default(1500).describe('Polling interval in milliseconds'),
-});
+
+// Initialize tool handler
+const toolHandler = new ToolHandler();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [ASK_TOOL, GET_CONVERSATIONS_TOOL],
+  tools: getAllTools(),
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+  const { name, arguments: args } = request.params;
+  
   try {
-    const { name, arguments: args } = request.params;
-
-    if (name === 'ask') {
-      const { askClaude } = await import('./tools/claude-desktop.js');
-      const validatedArgs = z.object({
-        prompt: z.string(),
-        conversationId: z.string().optional(),
-        timeout: z.number().min(1).max(300).optional(),
-        pollingInterval: z.number().min(0.5).max(10).optional(),
-      }).parse(args);
-
-      // Convert seconds to milliseconds for internal use
-      const pollingOptions = {
-        timeout: (validatedArgs.timeout || 30) * 1000,
-        interval: (validatedArgs.pollingInterval || 1.5) * 1000,
-      };
-      
-      const result = await askClaude(
-        validatedArgs.prompt,
-        validatedArgs.conversationId,
-        pollingOptions
-      );
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: result,
-          },
-        ],
-      };
-    }
-
-    if (name === 'get_conversations') {
-      const { getConversations } = await import('./tools/claude-desktop.js');
-      const result = await getConversations();
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    }
-
-    throw new Error(`Unknown tool: ${name}`);
+    // Get tool definition and validate args
+    const tool = getToolByName(name);
+    const validatedArgs = tool.zodSchema.parse(args);
+    
+    // Handle the tool request and ensure it returns CallToolResult
+    const result = await toolHandler.handle(name, validatedArgs);
+    return result as CallToolResult;
   } catch (error) {
+    logger.error(`Error handling tool ${name}:`, error);
     return {
       content: [
         {
@@ -139,4 +67,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error('Claude Desktop MCP Server running on stdio');
+logger.info(`Claude Desktop MCP Server v${VERSION} running on stdio`);
+
+// Handle graceful shutdown
+const cleanup = async () => {
+  logger.info('Shutting down MCP server...');
+  try {
+    await server.close();
+  } catch (error) {
+    logger.error('Error during shutdown:', error);
+  }
+  process.exit(0);
+};
+
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception:', error);
+  cleanup();
+});
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+  cleanup();
+});

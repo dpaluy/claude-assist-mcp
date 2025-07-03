@@ -1,19 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * Test script for Claude Desktop MCP
- * This script tests the MCP server directly without Claude Desktop
+ * Simple test for the ask command
  */
 
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 
-console.log('🧪 Testing Claude Desktop MCP Server...\n');
+console.log('🧪 Testing Claude Desktop MCP Ask Command...\n');
 
 // Start the MCP server
 const server = spawn('node', ['dist/index.js'], {
   stdio: ['pipe', 'pipe', 'pipe'],
-  env: { ...process.env, LOG_LEVEL: '3' } // Debug level
+  env: { ...process.env }
 });
 
 const rl = createInterface({
@@ -30,59 +29,62 @@ function sendRequest(method, params = {}) {
     method,
     params
   };
-  
+
   const message = JSON.stringify(request);
   console.log(`📤 Sending: ${method}`);
   server.stdin.write(message + '\n');
 }
-
-// Helper to delay
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Handle server output
 rl.on('line', (line) => {
   try {
     const response = JSON.parse(line);
     console.log('📥 Response:', JSON.stringify(response, null, 2));
+
+    // Check if we got a response
+    if (response.result?.content?.[0]?.text) {
+      const text = response.result.content[0].text;
+      if (text.includes('4') || text.includes('four')) {
+        console.log('\n✅ SUCCESS! Got response containing the answer!');
+      } else {
+        console.log('\n⚠️  Got response but no answer found');
+      }
+    }
   } catch (e) {
     // Not JSON, probably a log message
-    console.log('📝 Log:', line);
+    if (!line.includes('[DEBUG]') && !line.includes('[INFO]')) {
+      console.log('📝 Log:', line);
+    }
   }
 });
 
 // Handle server errors
 server.stderr.on('data', (data) => {
-  console.error('❌ Error:', data.toString());
+  const msg = data.toString();
+  if (!msg.includes('[DEBUG]') && !msg.includes('[INFO]')) {
+    console.error('❌ Error:', msg);
+  }
 });
 
-// Run tests
-async function runTests() {
-  console.log('\n1️⃣ Testing server initialization...');
-  await delay(2000); // Wait for server to start
-  
-  console.log('\n2️⃣ Testing tools/list...');
-  sendRequest('tools/list');
-  await delay(1000);
-  
-  console.log('\n3️⃣ Testing get_conversations...');
-  sendRequest('tools/call', {
-    name: 'get_conversations',
-    arguments: {}
-  });
-  await delay(2000);
-  
-  console.log('\n4️⃣ Testing ask (simple prompt)...');
+// Run test
+async function runTest() {
+  console.log('Waiting for server to start...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  console.log('\n📋 Testing ask command...');
   sendRequest('tools/call', {
     name: 'ask',
     arguments: {
       prompt: 'What is 2 + 2?',
-      timeout: 10,
-      pollingInterval: 1
+      timeout: 30,  // 30 seconds
+      pollingInterval: 2
     }
   });
-  await delay(12000);
-  
-  console.log('\n✅ Tests completed. Shutting down server...');
+
+  // Wait for response
+  await new Promise(resolve => setTimeout(resolve, 35000));
+
+  console.log('\n✅ Test completed. Shutting down server...');
   server.kill();
   process.exit(0);
 }
@@ -94,5 +96,5 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start tests
-runTests().catch(console.error);
+// Start test
+runTest().catch(console.error);
