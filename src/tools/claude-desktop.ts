@@ -40,6 +40,8 @@ export async function askClaude(
   const { timeout = 30000, interval = 2000 } = pollingOptions || {};
   
   logger.info(`Sending prompt to Claude Desktop: ${requestId}`);
+  logger.debug(`Prompt: ${prompt}`);
+  logger.debug(`Timeout: ${timeout}ms, Interval: ${interval}ms`);
   
   const escapedPrompt = escapeAppleScriptString(prompt);
   
@@ -48,17 +50,20 @@ export async function askClaude(
     set savedClipboard to the clipboard
     return savedClipboard
   `;
+  
+  logger.debug('Saving original clipboard content');
   const originalClipboard = await runAppleScript(saveClipboardScript);
   const escapedOriginalClipboard = escapeAppleScriptString(originalClipboard);
   
   const script = `
     tell application "Claude"
       activate
-      delay 0.5
+      delay 1
       
       tell application "System Events"
         tell process "Claude"
           set frontmost to true
+          delay 0.5
           
           ${conversationId ? `
           -- Try to select specific conversation
@@ -69,39 +74,66 @@ export async function askClaude(
           ` : `
           -- Create new conversation
           keystroke "n" using command down
-          delay 1
+          delay 1.5
           `}
+          
+          -- Find the text input area and click it
+          try
+            -- Look for the main text input field
+            set textAreas to text areas of window 1
+            if (count of textAreas) > 0 then
+              click last text area of window 1
+              delay 0.5
+            end if
+          end try
           
           -- Clear any existing text
           keystroke "a" using {command down}
-          keystroke (ASCII character 8)
+          delay 0.2
+          key code 51 -- delete key
           delay 0.5
           
           -- Set clipboard to prompt text
           set the clipboard to "${escapedPrompt}"
+          delay 0.2
           
-          -- Paste and send
+          -- Paste the prompt
           keystroke "v" using {command down}
           delay 0.5
-          key code 36
+          
+          -- Send the message
+          key code 36 -- return key
+          delay 1
         end tell
       end tell
     end tell
   `;
   
   try {
+    logger.debug('Executing AppleScript to send prompt');
     await runAppleScript(script);
+    logger.debug('AppleScript executed successfully');
+    
+    // Give Claude a moment to start processing
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Poll for response
+    logger.debug('Starting to poll for response');
     const response = await pollForClaudeResponse(requestId, prompt, { timeout, interval });
     
     // Restore original clipboard
+    logger.debug('Restoring original clipboard');
     await runAppleScript(`set the clipboard to "${escapedOriginalClipboard}"`);
     
     return response;
   } catch (error) {
+    logger.error('Error in askClaude:', error);
     // Restore original clipboard on error
-    await runAppleScript(`set the clipboard to "${escapedOriginalClipboard}"`);
+    try {
+      await runAppleScript(`set the clipboard to "${escapedOriginalClipboard}"`);
+    } catch (clipboardError) {
+      logger.error('Failed to restore clipboard:', clipboardError);
+    }
     throw error;
   }
 }
@@ -129,57 +161,41 @@ async function pollForClaudeResponse(
             try
               set frontWin to front window
               
-              -- Try multiple approaches to find messages
-              -- Approach 1: Look for specific message containers
-              try
-                set messageGroups to groups of frontWin whose role is "AXGroup"
-                repeat with msgGroup in messageGroups
-                  try
-                    set staticTexts to static texts of msgGroup
-                    repeat with txt in staticTexts
-                      set txtValue to value of txt
-                      if txtValue is not missing value and length of txtValue > 0 then
-                        set end of messageTexts to txtValue
-                      end if
-                    end repeat
-                  end try
-                end repeat
-              end try
-              
-              -- Approach 2: Look for text in scroll areas
-              try
-                set scrollAreas to scroll areas of frontWin
-                repeat with scrollArea in scrollAreas
-                  try
-                    set staticTexts to static texts of scrollArea
-                    repeat with txt in staticTexts
-                      set txtValue to value of txt
-                      if txtValue is not missing value and length of txtValue > 0 then
-                        set end of messageTexts to txtValue
-                      end if
-                    end repeat
-                  end try
-                end repeat
-              end try
-              
-              -- Approach 3: Get all static texts (fallback)
-              if (count of messageTexts) is 0 then
-                set allUIElements to entire contents of frontWin
-                repeat with elem in allUIElements
-                  try
-                    if (role of elem) is "AXStaticText" then
-                      set textContent to value of elem as string
-                      if textContent is not missing value and length of textContent > 0 then
-                        set end of messageTexts to textContent
+              -- Get all text from the window with better filtering
+              set allElements to entire contents of frontWin
+              repeat with elem in allElements
+                try
+                  if class of elem is static text then
+                    set txtValue to value of elem
+                    if txtValue is not missing value then
+                      set txtLength to length of txtValue
+                      -- Filter out short UI elements and empty strings
+                      if txtLength > 10 then
+                        -- Skip common UI elements
+                        if txtValue does not start with "Today" and ¬
+                           txtValue does not start with "Yesterday" and ¬
+                           txtValue does not contain "New chat" and ¬
+                           txtValue does not contain "Connect apps" and ¬
+                           txtValue does not contain "Projects" and ¬
+                           txtValue does not contain "Artifacts" and ¬
+                           txtValue does not contain "Copy" and ¬
+                           txtValue does not contain "Share" and ¬
+                           txtValue does not contain "Edit" and ¬
+                           txtValue does not contain "More" and ¬
+                           txtValue does not contain "How can I help" then
+                          set end of messageTexts to txtValue
+                        end if
                       end if
                     end if
-                  end try
-                end repeat
-              end if
+                  end if
+                end try
+              end repeat
               
-              -- Join all texts
-              set AppleScript's text item delimiters to linefeed
+              -- Join all texts with newlines
+              set AppleScript's text item delimiters to linefeed & linefeed
               set allText to messageTexts as text
+            on error errMsg
+              return "Error reading window: " & errMsg
             end try
             return allText
           end tell
@@ -189,17 +205,20 @@ async function pollForClaudeResponse(
     
     try {
       const currentText = await runAppleScript(script);
+      logger.debug(`Polling attempt, got text length: ${currentText.length}`);
       
       // Look for Claude's response more intelligently
       const response = extractClaudeResponse(currentText, originalPrompt);
       
       if (response && response !== lastResponseText) {
         // New response text detected
+        logger.debug(`New response detected: ${response.substring(0, 50)}...`);
         lastResponseText = response;
         stableCount = 0;
       } else if (response && response === lastResponseText) {
         // Response text hasn't changed
         stableCount++;
+        logger.debug(`Response stable for ${stableCount} checks`);
         if (stableCount >= requiredStableChecks) {
           // Check if we're not seeing typing indicators
           if (!currentText.includes('▍') && 
@@ -215,6 +234,7 @@ async function pollForClaudeResponse(
       if (currentText.includes('▍') || 
           currentText.includes('Claude is typing') ||
           currentText.includes('Thinking')) {
+        logger.debug('Typing indicators detected, resetting stable count');
         stableCount = 0;
       }
       
@@ -238,8 +258,11 @@ async function pollForClaudeResponse(
 
 function extractClaudeResponse(fullText: string, prompt: string): string | null {
   if (!fullText || fullText.length === 0) {
+    logger.debug('No text to extract from');
     return null;
   }
+  
+  logger.debug(`Extracting response from text: ${fullText.substring(0, 200)}...`);
   
   // Clean the text first
   const cleanedText = fullText
@@ -247,81 +270,54 @@ function extractClaudeResponse(fullText: string, prompt: string): string | null 
     .replace(/\r/g, '\n')
     .trim();
   
-  // Split into lines for better processing
-  const lines = cleanedText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  // Split into meaningful chunks (double newline separated)
+  const chunks = cleanedText.split(/\n\n+/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0);
+  logger.debug(`Found ${chunks.length} text chunks`);
   
-  // Find the prompt line
-  let promptLineIndex = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes(prompt) || prompt.includes(lines[i])) {
-      promptLineIndex = i;
+  // Find the prompt in the chunks
+  let promptChunkIndex = -1;
+  for (let i = 0; i < chunks.length; i++) {
+    if (chunks[i].includes(prompt)) {
+      promptChunkIndex = i;
+      logger.debug(`Found prompt at chunk index ${i}`);
       break;
     }
   }
   
-  // Collect all lines after the prompt
-  const responseLines: string[] = [];
-  const startIndex = promptLineIndex !== -1 ? promptLineIndex + 1 : 0;
-  
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i];
+  // If we found the prompt, look for the response after it
+  if (promptChunkIndex !== -1 && promptChunkIndex < chunks.length - 1) {
+    // Get all chunks after the prompt
+    const responseChunks = chunks.slice(promptChunkIndex + 1);
     
-    // Skip UI elements and metadata
-    if (line.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday|\d+:\d+\s*(AM|PM))$/i)) {
-      continue;
-    }
+    // Filter out UI elements and join
+    const filteredChunks = responseChunks.filter(chunk => {
+      // Skip if it's a known UI element or too short
+      if (chunk.length < 10) return false;
+      if (chunk.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday|Claude|You|DP|User)$/i)) return false;
+      if (chunk.match(/^\d{1,2}:\d{2}\s*(AM|PM)$/i)) return false;
+      if (chunk.includes('▍') || chunk.includes('Claude is typing') || chunk === 'Thinking') return false;
+      
+      return true;
+    });
     
-    // Skip timestamps
-    if (line.match(/^\d{1,2}:\d{2}\s*(AM|PM|am|pm)$/)) {
-      continue;
-    }
-    
-    // Skip user indicators
-    if (line.match(/^(You|User|Me|DP)$/i)) {
-      continue;
-    }
-    
-    // Skip typing indicators
-    if (line.includes('▍') || line.includes('Claude is typing') || line === 'Thinking') {
-      continue;
-    }
-    
-    // Check if this might be the start of Claude's response
-    if (line.match(/^(Claude|Assistant|AI)$/i)) {
-      // Skip this line but include everything after
-      continue;
-    }
-    
-    // Include substantial content
-    if (line.length > 3) {
-      responseLines.push(line);
+    if (filteredChunks.length > 0) {
+      const response = filteredChunks.join('\n\n').trim();
+      logger.debug(`Extracted response: ${response.substring(0, 100)}...`);
+      return response;
     }
   }
   
-  // Join the response lines
-  let response = responseLines.join('\n').trim();
-  
-  // Additional cleanup
-  response = response
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .replace(/([.!?])\s*([A-Z])/g, '$1\n$2') // Add line breaks after sentences
-    .trim();
-  
-  // Return if we have meaningful content
-  if (response.length > 10) {
-    return response;
-  }
-  
-  // Fallback: Look for any substantial text block in the latter half
-  const halfwayPoint = Math.floor(lines.length / 2);
-  for (let i = lines.length - 1; i >= halfwayPoint; i--) {
-    const line = lines[i];
-    if (line.length > 20 && 
-        !line.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday)$/i)) {
+  // Fallback: Look for any substantial text that's not UI elements
+  const allLines = cleanedText.split('\n').map(l => l.trim()).filter(l => l.length > 20);
+  for (const line of allLines) {
+    if (!line.match(/^(Copy|Share|More|Edit|New chat|Today|Yesterday|How can I help|Connect apps|Projects|Artifacts)$/i) &&
+        !line.includes(prompt)) {
+      logger.debug(`Fallback response: ${line.substring(0, 100)}...`);
       return line;
     }
   }
   
+  logger.debug('No response found in text');
   return null;
 }
 

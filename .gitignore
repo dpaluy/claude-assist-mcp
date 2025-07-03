@@ -37,4 +37,5 @@ temp/
 *.tmp
 
 # Claude Desktop config (local)
-.claude/settings.local.json
+.claude/*.local.json
+
