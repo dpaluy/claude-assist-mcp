@@ -328,6 +328,31 @@ The MCP server uses AppleScript to communicate with Claude Desktop:
    - Grant accessibility permissions to your terminal
    - Run the build command with proper permissions
 
+4. **MCP Server Crashes After Sending Requests**
+   If the MCP server crashes after handling requests, you can:
+   
+   - **Disable response polling** (recommended for stability):
+     ```bash
+     export SKIP_CLAUDE_POLLING=true
+     ```
+     This will send the message to Claude Desktop but won't try to read the response.
+   
+   - **Enable debug logging** to see what's happening:
+     ```bash
+     export LOG_LEVEL=3
+     ```
+   
+   - **Check stderr output** - All logs are now written to stderr to avoid interfering with the MCP protocol on stdout.
+
+### Known Limitations with Response Polling
+
+Response polling can occasionally cause instability due to:
+- Extended polling duration (30 seconds default)
+- Complex UI element reading from Electron apps
+- Timing issues with Claude's response generation
+
+Consider using `SKIP_CLAUDE_POLLING=true` for more reliable operation if you don't need response reading.
+
 ## Contributing
 
 We welcome contributions to MCP Claude Desktop! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.

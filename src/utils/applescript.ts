@@ -1,8 +1,6 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { runAppleScript as runAppleScriptLib } from 'run-applescript';
 import { logger } from './logger.js';
-
-const execAsync = promisify(exec);
+import { AppleScriptError as AppleScriptErrorClass, ErrorCode } from './errors.js';
 
 export interface AppleScriptOptions {
   timeout?: number;
@@ -10,12 +8,8 @@ export interface AppleScriptOptions {
   retryDelay?: number;
 }
 
-export class AppleScriptError extends Error {
-  constructor(message: string, public code?: number) {
-    super(message);
-    this.name = 'AppleScriptError';
-  }
-}
+// Re-export for backward compatibility
+export const AppleScriptError = AppleScriptErrorClass;
 
 export async function runAppleScript(
   script: string,
@@ -27,39 +21,98 @@ export async function runAppleScript(
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      // Escape single quotes in the script properly
-      const escapedScript = script.replace(/'/g, "'\"'\"'");
-      const { stdout, stderr } = await execAsync(`osascript -e '${escapedScript}'`, {
-        timeout,
-      });
-
-      if (stderr) {
-        logger.warn('AppleScript stderr:', stderr);
+      // Validate script
+      if (!script.trim()) {
+        throw new AppleScriptErrorClass(
+          'Script cannot be empty',
+          ErrorCode.INVALID_INPUT
+        );
       }
 
-      return stdout.trim();
+      if (script.length > 50000) {
+        throw new AppleScriptErrorClass(
+          'Script too long',
+          ErrorCode.INVALID_INPUT
+        );
+      }
+
+      // Use run-applescript package which handles escaping and execution properly
+      // Add timeout wrapper to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('AppleScript execution timeout')), timeout);
+      });
+      
+      const result = await Promise.race([
+        runAppleScriptLib(script),
+        timeoutPromise
+      ]);
+      
+      return result.trim();
     } catch (error: any) {
       logger.error(`AppleScript attempt ${attempt} failed:`, error);
 
       if (attempt === retries) {
-        throw new AppleScriptError(
+        // Parse error number from AppleScript error message if present
+        let appleScriptErrorNumber: number | undefined;
+        const errorMatch = error.message?.match(/\((\d+)\)$/);
+        if (errorMatch) {
+          appleScriptErrorNumber = parseInt(errorMatch[1]);
+        }
+
+        // Determine appropriate error code based on error type
+        let errorCode = ErrorCode.APPLESCRIPT_EXECUTION_FAILED;
+        if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+          errorCode = ErrorCode.APPLESCRIPT_TIMEOUT;
+        } else if (error.message?.includes('is not allowed to send keystrokes')) {
+          // More specific check for actual permission errors
+          errorCode = ErrorCode.APPLESCRIPT_PERMISSION_DENIED;
+        }
+
+        const scriptError = new AppleScriptErrorClass(
           `AppleScript execution failed after ${retries} attempts: ${error.message}`,
+          errorCode,
+          error.message,
           error.code
         );
+        
+        // Add the parsed error number to the error object
+        if (appleScriptErrorNumber) {
+          (scriptError as any).appleScriptErrorNumber = appleScriptErrorNumber;
+        }
+        
+        throw scriptError;
       }
 
       await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
   }
 
-  throw new AppleScriptError('AppleScript execution failed');
+  throw new AppleScriptErrorClass(
+    'AppleScript execution failed',
+    ErrorCode.APPLESCRIPT_EXECUTION_FAILED
+  );
 }
 
 export function escapeAppleScriptString(str: string): string {
+  // Validate input
+  if (typeof str !== 'string') {
+    throw new AppleScriptErrorClass(
+      'Input must be a string',
+      ErrorCode.INVALID_INPUT
+    );
+  }
+
+  // Security check for script injection attempts
+  const maxLength = 10000;
+  if (str.length > maxLength) {
+    throw new AppleScriptErrorClass(
+      `String too long (${str.length} chars, max ${maxLength})`,
+      ErrorCode.INVALID_INPUT
+    );
+  }
+
+  // With run-applescript, we only need to escape double quotes and backslashes
   return str
     .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t');
+    .replace(/"/g, '\\"');
 }

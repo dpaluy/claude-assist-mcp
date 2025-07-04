@@ -14,29 +14,35 @@ export class Logger {
 
   error(message: string, ...args: any[]) {
     if (this.level >= LogLevel.ERROR) {
-      console.error(`[ERROR] ${message}`, ...args);
+      process.stderr.write(`[ERROR] ${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
     }
   }
 
   warn(message: string, ...args: any[]) {
     if (this.level >= LogLevel.WARN) {
-      console.warn(`[WARN] ${message}`, ...args);
+      process.stderr.write(`[WARN] ${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
     }
   }
 
   info(message: string, ...args: any[]) {
     if (this.level >= LogLevel.INFO) {
-      console.error(`[INFO] ${message}`, ...args);
+      process.stderr.write(`[INFO] ${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
     }
   }
 
   debug(message: string, ...args: any[]) {
     if (this.level >= LogLevel.DEBUG) {
-      console.error(`[DEBUG] ${message}`, ...args);
+      process.stderr.write(`[DEBUG] ${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
     }
   }
 }
 
-export const logger = new Logger(
+// Create a default logger - will be reconfigured when config loads
+export let logger = new Logger(
   process.env.LOG_LEVEL ? parseInt(process.env.LOG_LEVEL) : LogLevel.INFO
 );
+
+// Function to reconfigure logger with loaded config
+export function configureLogger(level: LogLevel): void {
+  logger = new Logger(level);
+}
